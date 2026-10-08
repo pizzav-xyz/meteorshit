@@ -12,7 +12,9 @@ import com.example.addon.social.scarypeople.ScaryPeople;
 import com.mojang.logging.LogUtils;
 import meteordevelopment.meteorclient.addons.MeteorAddon;
 import meteordevelopment.meteorclient.commands.Commands;
+import meteordevelopment.meteorclient.gui.tabs.Tab;
 import meteordevelopment.meteorclient.gui.tabs.Tabs;
+import meteordevelopment.meteorclient.gui.tabs.builtin.FriendsTab;
 import meteordevelopment.meteorclient.systems.Systems;
 import meteordevelopment.meteorclient.systems.modules.Category;
 import meteordevelopment.meteorclient.systems.modules.Modules;
@@ -38,11 +40,25 @@ public class MeteorSocialAddon extends MeteorAddon {
         Modules.get().add(new SocialColorsModule());
 
         Tabs.add(new SocialTab());
+        moveTabBefore(SocialTab.class, FriendsTab.class);
     }
 
     @Override
     public void onRegisterCategories() {
         Modules.registerCategory(CATEGORY);
+    }
+
+    private static void moveTabBefore(Class<? extends Tab> toMove, Class<? extends Tab> anchor) {
+        java.util.List<Tab> tabs = Tabs.get();
+        int from = -1, to = -1;
+        for (int i = 0; i < tabs.size(); i++) {
+            if (tabs.get(i).getClass() == toMove) from = i;
+            if (tabs.get(i).getClass() == anchor) to = i;
+        }
+        if (from == -1 || to == -1 || from == to) return;
+        Tab tab = tabs.remove(from);
+        if (from < to) to--;
+        tabs.add(to, tab);
     }
 
     @Override
