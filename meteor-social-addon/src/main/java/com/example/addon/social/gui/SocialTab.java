@@ -1,9 +1,11 @@
 package com.example.addon.social.gui;
 
+import com.example.addon.social.SocialColorUtils;
 import com.example.addon.social.alttracker.AltAccount;
 import com.example.addon.social.alttracker.AltTracker;
 import com.example.addon.social.blacklistedpeople.BlacklistedPeople;
 import com.example.addon.social.blacklistedpeople.BlacklistedPerson;
+import com.example.addon.social.modules.SocialColorsModule;
 import com.example.addon.social.scarypeople.ScaryPeople;
 import com.example.addon.social.scarypeople.ScaryPerson;
 import meteordevelopment.meteorclient.gui.GuiTheme;
@@ -12,12 +14,16 @@ import meteordevelopment.meteorclient.gui.tabs.TabScreen;
 import meteordevelopment.meteorclient.gui.tabs.WindowTabScreen;
 import meteordevelopment.meteorclient.gui.widgets.containers.WHorizontalList;
 import meteordevelopment.meteorclient.gui.widgets.containers.WTable;
+import meteordevelopment.meteorclient.gui.widgets.containers.WVerticalList;
 import meteordevelopment.meteorclient.gui.widgets.input.WTextBox;
 import meteordevelopment.meteorclient.gui.widgets.pressable.WMinus;
 import meteordevelopment.meteorclient.gui.widgets.pressable.WPlus;
 import meteordevelopment.meteorclient.systems.friends.Friend;
 import meteordevelopment.meteorclient.systems.friends.Friends;
+import meteordevelopment.meteorclient.systems.modules.Modules;
+import meteordevelopment.meteorclient.utils.misc.NbtUtils;
 import meteordevelopment.meteorclient.utils.network.MeteorExecutor;
+import meteordevelopment.meteorclient.utils.render.color.Color;
 import net.minecraft.client.gui.screens.Screen;
 
 import static meteordevelopment.meteorclient.MeteorClient.mc;
@@ -38,204 +44,295 @@ public class SocialTab extends Tab {
     }
 
     private static class SocialScreen extends WindowTabScreen {
-        private WTable friendsTable;
-        private WTable scaryTable;
-        private WTable blacklistedTable;
-        private WTable altsTable;
-
         public SocialScreen(GuiTheme theme, Tab tab) {
             super(theme, tab);
         }
 
         @Override
         public void initWidgets() {
-            add(theme.label("Friends")).expandX().center();
-            add(theme.horizontalSeparator()).expandX();
-            friendsTable = add(theme.table()).expandX().minWidth(400).widget();
-            initFriendsTable();
+            // Top row: Friends (left) + Scary People (right)
+            WHorizontalList topRow = add(theme.horizontalList()).expandX().widget();
 
-            WHorizontalList friendsInput = add(theme.horizontalList()).expandX().widget();
-            WTextBox friendNameW = friendsInput.add(theme.textBox("", (text, c) -> c != ' ')).expandX().widget();
+            WVerticalList friendsSection = topRow.add(theme.verticalList()).expandX().widget();
+            friendsSection.add(theme.label("Friends")).expandX().center();
+            friendsSection.add(theme.horizontalSeparator()).expandX();
+
+            WTable friendsTable = friendsSection.add(theme.table()).expandX().minWidth(200).widget();
+            initFriendsTable(friendsTable);
+
+            friendsSection.add(theme.horizontalSeparator()).expandX();
+
+            WHorizontalList friendsInputList = friendsSection.add(theme.horizontalList()).expandX().widget();
+            WTextBox friendNameW = friendsInputList.add(theme.textBox("", (text, c) -> c != ' ')).expandX().widget();
             friendNameW.setFocused(true);
-            WPlus friendAdd = friendsInput.add(theme.plus()).widget();
+
+            WPlus friendAdd = friendsInputList.add(theme.plus()).widget();
             friendAdd.action = () -> {
                 String name = friendNameW.get().trim();
                 Friend friend = new Friend(name);
+
                 if (Friends.get().add(friend)) {
                     friendNameW.set("");
-                    initFriendsTable();
-                    friendNameW.setFocused(true);
+                    reload();
+
                     MeteorExecutor.execute(() -> {
                         friend.updateInfo();
-                        mc.execute(() -> {
-                            initFriendsTable();
-                            friendNameW.setFocused(true);
-                        });
+                        reload();
                     });
                 }
             };
 
-            add(theme.horizontalSeparator()).expandX();
-            add(theme.label("Scary People")).expandX().center();
-            add(theme.horizontalSeparator()).expandX();
-            scaryTable = add(theme.table()).expandX().minWidth(400).widget();
-            initScaryTable();
+            topRow.add(theme.verticalSeparator()).centerY();
 
-            WHorizontalList scaryInput = add(theme.horizontalList()).expandX().widget();
-            WTextBox scaryNameW = scaryInput.add(theme.textBox("", (text, c) -> c != ' ')).expandX().widget();
-            WPlus scaryAdd = scaryInput.add(theme.plus()).widget();
+            WVerticalList scarySection = topRow.add(theme.verticalList()).expandX().widget();
+            scarySection.add(theme.label("Scary People")).expandX().center();
+            scarySection.add(theme.horizontalSeparator()).expandX();
+
+            WTable scaryTable = scarySection.add(theme.table()).expandX().minWidth(200).widget();
+            initScaryTable(scaryTable);
+
+            scarySection.add(theme.horizontalSeparator()).expandX();
+
+            WHorizontalList scaryInputList = scarySection.add(theme.horizontalList()).expandX().widget();
+            WTextBox scaryNameW = scaryInputList.add(theme.textBox("", (text, c) -> c != ' ')).expandX().widget();
+
+            WPlus scaryAdd = scaryInputList.add(theme.plus()).widget();
             scaryAdd.action = () -> {
                 String name = scaryNameW.get().trim();
                 ScaryPerson scaryPerson = new ScaryPerson(name);
+
                 if (ScaryPeople.get().add(scaryPerson)) {
                     scaryNameW.set("");
-                    initScaryTable();
+                    reload();
+
                     MeteorExecutor.execute(() -> {
                         scaryPerson.updateInfo();
-                        mc.execute(this::initScaryTable);
+                        reload();
                     });
                 }
             };
 
-            add(theme.horizontalSeparator()).expandX();
-            add(theme.label("Blacklisted People")).expandX().center();
-            add(theme.horizontalSeparator()).expandX();
-            blacklistedTable = add(theme.table()).expandX().minWidth(400).widget();
-            initBlacklistedTable();
+            // Bottom row: Blacklisted People (left) + Alt Groups (right)
+            WHorizontalList bottomRow = add(theme.horizontalList()).expandX().widget();
 
-            WHorizontalList blacklistedInput = add(theme.horizontalList()).expandX().widget();
-            WTextBox blacklistedNameW = blacklistedInput.add(theme.textBox("", (text, c) -> c != ' ')).expandX().widget();
-            WPlus blacklistedAdd = blacklistedInput.add(theme.plus()).widget();
+            WVerticalList blacklistedSection = bottomRow.add(theme.verticalList()).expandX().widget();
+            blacklistedSection.add(theme.label("Blacklisted People")).expandX().center();
+            blacklistedSection.add(theme.horizontalSeparator()).expandX();
+
+            WTable blacklistedTable = blacklistedSection.add(theme.table()).expandX().minWidth(200).widget();
+            initBlacklistedTable(blacklistedTable);
+
+            blacklistedSection.add(theme.horizontalSeparator()).expandX();
+
+            WHorizontalList blacklistedInputList = blacklistedSection.add(theme.horizontalList()).expandX().widget();
+            WTextBox blacklistedNameW = blacklistedInputList.add(theme.textBox("", (text, c) -> c != ' ')).expandX().widget();
+
+            WPlus blacklistedAdd = blacklistedInputList.add(theme.plus()).widget();
             blacklistedAdd.action = () -> {
                 String name = blacklistedNameW.get().trim();
                 BlacklistedPerson blacklistedPerson = new BlacklistedPerson(name);
+
                 if (BlacklistedPeople.get().add(blacklistedPerson)) {
                     blacklistedNameW.set("");
-                    initBlacklistedTable();
+                    reload();
+
                     MeteorExecutor.execute(() -> {
                         blacklistedPerson.updateInfo();
-                        mc.execute(this::initBlacklistedTable);
+                        reload();
                     });
                 }
             };
 
-            add(theme.horizontalSeparator()).expandX();
-            add(theme.label("Alt Groups")).expandX().center();
-            add(theme.horizontalSeparator()).expandX();
-            altsTable = add(theme.table()).expandX().minWidth(400).widget();
-            initAltsTable();
+            bottomRow.add(theme.verticalSeparator()).centerY();
 
-            WHorizontalList altsInput = add(theme.horizontalList()).expandX().widget();
-            WTextBox mainW = altsInput.add(theme.textBox("", (text, c) -> c != ' ')).expandX().widget();
-            WTextBox altW = altsInput.add(theme.textBox("", (text, c) -> c != ' ')).expandX().widget();
-            WPlus altsAdd = altsInput.add(theme.plus()).widget();
+            WVerticalList altsSection = bottomRow.add(theme.verticalList()).expandX().widget();
+            altsSection.add(theme.label("Alt Groups")).expandX().center();
+            altsSection.add(theme.horizontalSeparator()).expandX();
+
+            WTable altsTable = altsSection.add(theme.table()).expandX().minWidth(200).widget();
+            initAltsTable(altsTable);
+
+            altsSection.add(theme.horizontalSeparator()).expandX();
+
+            WHorizontalList altsInputList = altsSection.add(theme.horizontalList()).expandX().widget();
+            WTextBox mainW = altsInputList.add(theme.textBox("", (text, c) -> c != ' ')).expandX().widget();
+            WTextBox altW = altsInputList.add(theme.textBox("", (text, c) -> c != ' ')).expandX().widget();
+
+            WPlus altsAdd = altsInputList.add(theme.plus()).widget();
             altsAdd.action = () -> {
                 String main = mainW.get().trim();
                 String alt = altW.get().trim();
+
                 if (!main.isEmpty() && !alt.isEmpty() && AltTracker.get().linkAccounts(main, alt)) {
                     mainW.set("");
                     altW.set("");
-                    initAltsTable();
+                    reload();
                 }
             };
 
             enterAction = friendAdd.action;
         }
 
-        private void initFriendsTable() {
-            friendsTable.clear();
+        private Color getNameColor(String playerName) {
+            SocialColorsModule colors = Modules.get() != null ? Modules.get().get(SocialColorsModule.class) : null;
+            if (colors == null || !colors.isActive()) return null;
+
+            boolean isSelf = mc.player != null && playerName.equals(mc.player.getName().getString());
+            boolean isScary = ScaryPeople.get().get(playerName) != null;
+            boolean isBlacklisted = BlacklistedPeople.get().get(playerName) != null;
+            boolean isAlt = AltTracker.get().isTracked(playerName);
+            boolean isFriend = Friends.get().get(playerName) != null;
+
+            SocialColorUtils.Status status = SocialColorUtils.resolveStatus(isSelf, isScary, isBlacklisted, isAlt, isFriend, false);
+            if (status == SocialColorUtils.Status.Player || status == SocialColorUtils.Status.Team) return null;
+            return SocialColorUtils.colorFor(status);
+        }
+
+        private void initFriendsTable(WTable table) {
+            table.clear();
             if (Friends.get().isEmpty()) return;
 
             Friends.get().forEach(friend ->
                 MeteorExecutor.execute(() -> {
-                    if (friend.headTextureNeedsUpdate()) friend.updateInfo();
+                    if (friend.headTextureNeedsUpdate()) {
+                        friend.updateInfo();
+                        reload();
+                    }
                 })
             );
 
             for (Friend friend : Friends.get()) {
-                friendsTable.add(theme.texture(32, 32, friend.getHead().needsRotate() ? 90 : 0, friend.getHead()));
-                friendsTable.add(theme.label(friend.getName()));
+                table.add(theme.texture(32, 32, friend.getHead().needsRotate() ? 90 : 0, friend.getHead()));
 
-                WMinus remove = friendsTable.add(theme.minus()).expandCellX().right().widget();
+                Color nameColor = getNameColor(friend.getName());
+
+                if (nameColor != null) {
+                    table.add(theme.label(friend.getName())).widget().color = nameColor;
+                } else {
+                    table.add(theme.label(friend.getName()));
+                }
+
+                WMinus remove = table.add(theme.minus()).expandCellX().right().widget();
                 remove.action = () -> {
                     Friends.get().remove(friend);
-                    initFriendsTable();
+                    reload();
                 };
 
-                friendsTable.row();
+                table.row();
             }
         }
 
-        private void initScaryTable() {
-            scaryTable.clear();
+        private void initScaryTable(WTable table) {
+            table.clear();
             if (ScaryPeople.get().isEmpty()) return;
 
             ScaryPeople.get().forEach(scaryPerson ->
                 MeteorExecutor.execute(() -> {
-                    if (scaryPerson.headTextureNeedsUpdate()) scaryPerson.updateInfo();
+                    if (scaryPerson.headTextureNeedsUpdate()) {
+                        scaryPerson.updateInfo();
+                        reload();
+                    }
                 })
             );
 
             for (ScaryPerson scaryPerson : ScaryPeople.get()) {
-                scaryTable.add(theme.texture(32, 32, scaryPerson.getHead().needsRotate() ? 90 : 0, scaryPerson.getHead()));
-                scaryTable.add(theme.label(scaryPerson.getName()));
+                table.add(theme.texture(32, 32, scaryPerson.getHead().needsRotate() ? 90 : 0, scaryPerson.getHead()));
 
-                WMinus remove = scaryTable.add(theme.minus()).expandCellX().right().widget();
+                Color nameColor = getNameColor(scaryPerson.getName());
+
+                if (nameColor != null) {
+                    table.add(theme.label(scaryPerson.getName())).widget().color = nameColor;
+                } else {
+                    table.add(theme.label(scaryPerson.getName()));
+                }
+
+                WMinus remove = table.add(theme.minus()).expandCellX().right().widget();
                 remove.action = () -> {
                     ScaryPeople.get().remove(scaryPerson);
-                    initScaryTable();
+                    reload();
                 };
 
-                scaryTable.row();
+                table.row();
             }
         }
 
-        private void initBlacklistedTable() {
-            blacklistedTable.clear();
+        private void initBlacklistedTable(WTable table) {
+            table.clear();
             if (BlacklistedPeople.get().isEmpty()) return;
 
             BlacklistedPeople.get().forEach(blacklistedPerson ->
                 MeteorExecutor.execute(() -> {
-                    if (blacklistedPerson.headTextureNeedsUpdate()) blacklistedPerson.updateInfo();
+                    if (blacklistedPerson.headTextureNeedsUpdate()) {
+                        blacklistedPerson.updateInfo();
+                        reload();
+                    }
                 })
             );
 
             for (BlacklistedPerson blacklistedPerson : BlacklistedPeople.get()) {
-                blacklistedTable.add(theme.texture(32, 32, blacklistedPerson.getHead().needsRotate() ? 90 : 0, blacklistedPerson.getHead()));
-                blacklistedTable.add(theme.label(blacklistedPerson.getName()));
+                table.add(theme.texture(32, 32, blacklistedPerson.getHead().needsRotate() ? 90 : 0, blacklistedPerson.getHead()));
 
-                WMinus remove = blacklistedTable.add(theme.minus()).expandCellX().right().widget();
+                Color nameColor = getNameColor(blacklistedPerson.getName());
+
+                if (nameColor != null) {
+                    table.add(theme.label(blacklistedPerson.getName())).widget().color = nameColor;
+                } else {
+                    table.add(theme.label(blacklistedPerson.getName()));
+                }
+
+                WMinus remove = table.add(theme.minus()).expandCellX().right().widget();
                 remove.action = () -> {
                     BlacklistedPeople.get().remove(blacklistedPerson);
-                    initBlacklistedTable();
+                    reload();
                 };
 
-                blacklistedTable.row();
+                table.row();
             }
         }
 
-        private void initAltsTable() {
-            altsTable.clear();
+        private void initAltsTable(WTable table) {
+            table.clear();
             if (AltTracker.get().isEmpty()) return;
 
             AltTracker.get().forEach(group ->
                 MeteorExecutor.execute(() -> {
-                    if (group.headTextureNeedsUpdate()) group.updateInfo();
+                    if (group.headTextureNeedsUpdate()) {
+                        group.updateInfo();
+                        reload();
+                    }
                 })
             );
 
             for (AltAccount group : AltTracker.get()) {
-                altsTable.add(theme.texture(32, 32, group.getHead().needsRotate() ? 90 : 0, group.getHead()));
-                altsTable.add(theme.label(group.getMainAccount() + " (+" + group.getAltAccounts().size() + " alts)"));
+                table.add(theme.texture(32, 32, group.getHead().needsRotate() ? 90 : 0, group.getHead()));
 
-                WMinus remove = altsTable.add(theme.minus()).expandCellX().right().widget();
+                String label = group.getMainAccount() + " (+" + group.getAltAccounts().size() + " alts)";
+                Color nameColor = getNameColor(group.getMainAccount());
+
+                if (nameColor != null) {
+                    table.add(theme.label(label)).widget().color = nameColor;
+                } else {
+                    table.add(theme.label(label));
+                }
+
+                WMinus remove = table.add(theme.minus()).expandCellX().right().widget();
                 remove.action = () -> {
                     AltTracker.get().remove(group);
-                    initAltsTable();
+                    reload();
                 };
 
-                altsTable.row();
+                table.row();
             }
+        }
+
+        @Override
+        public boolean toClipboard() {
+            return NbtUtils.toClipboard(Friends.get()) && NbtUtils.toClipboard(ScaryPeople.get()) && NbtUtils.toClipboard(BlacklistedPeople.get()) && NbtUtils.toClipboard(AltTracker.get());
+        }
+
+        @Override
+        public boolean fromClipboard() {
+            return NbtUtils.fromClipboard(Friends.get()) && NbtUtils.fromClipboard(ScaryPeople.get()) && NbtUtils.fromClipboard(BlacklistedPeople.get()) && NbtUtils.fromClipboard(AltTracker.get());
         }
     }
 }
