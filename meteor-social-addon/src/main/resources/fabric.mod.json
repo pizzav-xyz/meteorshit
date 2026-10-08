@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "id": "meteor-social-addon",
+  "version": "${version}",
+  "name": "Social Addon",
+  "description": "Social features for Meteor Client: alt tracking, scary people, blacklist, and social tab UI.",
+  "authors": [
+    "pizzav"
+  ],
+  "contact": {
+    "sources": "https://github.com/pizzav-xyz/meteorshit"
+  },
+  "icon": "assets/meteor-social-addon/icon.png",
+  "environment": "client",
+  "entrypoints": {
+    "meteor": [
+      "com.example.addon.social.MeteorSocialAddon"
+    ]
+  },
+  "depends": {
+    "java": ">=${jdk_version}",
+    "minecraft": "${minecraft_version}",
+    "meteor-client": "*"
+  }
+}
